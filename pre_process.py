@@ -107,10 +107,7 @@ def main():
     y = np.expand_dims(np.array(lmap(lambda x: x[4], train_set)), axis=1)
 
     train_corpus = np.concatenate((q1w, q1c, q2w, q2c, y), axis=-1)
-    dev_corpus = train_corpus[:1024]
-    train_corpus = train_corpus[1024:]
     np.save('train_corpus', train_corpus)
-    np.save('dev_corpus', dev_corpus)
 
     test_set = []
     for k, v in test.iterrows():
