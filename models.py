@@ -3,10 +3,12 @@ import os
 from layers import add_dense_layer, dot_attention, biGRUs, add_GRU
 
 
-class RnnQNet:
-    def __init__(self, word_embedding, char_embedding, encoder_units_number=[512, 256], attention_size=[128],
-                 hidden_rnn_size=[128], learning_rate=0.0001, log_dir='./logs'):
+class BaseModel(object):
 
+    def __init__(self, word_embedding, char_embedding, model_name, log_dir):
+        self.word_embedding = word_embedding
+        self.char_embedding = char_embedding
+        self._name = model_name
         tf.reset_default_graph()
         self.q1_words = tf.placeholder(shape=[None, None], dtype=tf.int32, name='q1_words')
         self.q2_words = tf.placeholder(shape=[None, None], dtype=tf.int32, name='q2_words')
@@ -15,6 +17,84 @@ class RnnQNet:
         self.y = tf.placeholder(shape=[None], dtype=tf.int32, name='y_start')
         self.dropout_keep_prob = tf.placeholder(dtype=tf.float32, shape=[], name='dropout_keep_prob')
         self.global_step = 0
+
+        self.init_op = tf.global_variables_initializer()
+        self.merge_op = tf.summary.merge_all()
+        self.session = tf.Session()
+        self.session.run(self.init_op)
+        self.saver = tf.train.Saver()
+        self.writer = tf.summary.FileWriter(log_dir,
+                                            graph=self.session.graph
+                                            )
+
+        self.train_op = None
+        self.loss = None
+        self.output = None
+
+    def train(self, q1w, q1c, q2w, q2c, y, drop_keep_prob=0.85, record_interval=10):
+        feed_dict = {
+            self.q1_words: q1w,
+            self.q2_words: q2w,
+            self.q1_chars: q1c,
+            self.q2_chars: q2c,
+            self.y: y,
+            self.dropout_keep_prob: drop_keep_prob
+        }
+        if self.global_step % record_interval == 0:
+            _, loss, summaries = self.session.run([self.train_op, self.loss, self.merge_op], feed_dict=feed_dict)
+            self.writer.add_summary(summaries, self.global_step)
+        else:
+            _, loss = self.session.run([self.train_op, self.loss], feed_dict=feed_dict)
+        self.global_step += 1
+        return loss
+
+    def evaluate(self, q1w, q1c, q2w, q2c, y, drop_keep_prob=1.0):
+        feed_dict = {
+            self.q1_words: q1w,
+            self.q2_words: q2w,
+            self.q1_chars: q1c,
+            self.q2_chars: q2c,
+            self.y: y,
+            self.dropout_keep_prob: drop_keep_prob
+        }
+        loss = self.session.run([self.loss], feed_dict=feed_dict)[0]
+        summary = tf.Summary()
+        summary_value = summary.value.add()
+        summary_value.simple_value = loss
+        summary_value.tag = 'evaluate_loss'
+        self.writer.add_summary(summary, self.global_step)
+        return loss
+
+    def predict(self, q1w, q1c, q2w, q2c):
+        feed_dict = {
+            self.q1_words: q1w,
+            self.q2_words: q2w,
+            self.q1_chars: q1c,
+            self.q2_chars: q2c,
+            self.dropout_keep_prob: 1.0
+        }
+        y_hat = self.session.run([self.output], feed_dict=feed_dict)[0]
+        return y_hat[:, 1]
+
+    def load_model(self, model_path='./QModel'):
+        self.saver.restore(self.session, model_path + '/rnnqnet')
+
+    def save_model(self, model_path='./QModel'):
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
+        model_file = model_path + '/rnnqnet'
+        self.saver.save(self.session, model_file)
+
+
+class RnnQNet(BaseModel):
+    def __init__(self, word_embedding, char_embedding, log_dir='./logs'):
+        super().__init__(word_embedding, char_embedding, 'Rnn_QNet', log_dir=log_dir)
+
+        self._build_model(word_embedding, char_embedding, encoder_units_number=[512, 256], attention_size=[128],
+                          hidden_rnn_size=[128], learning_rate=0.0001, )
+
+    def _build_model(self, word_embedding, char_embedding, encoder_units_number, attention_size,
+                     hidden_rnn_size, learning_rate=0.0001):
 
         with tf.variable_scope('word_embedding', initializer=tf.contrib.layers.xavier_initializer()):
             Ww = tf.Variable(word_embedding, trainable=True, dtype=tf.float32)
@@ -112,6 +192,7 @@ class RnnQNet:
             # self.s2=tf.reduce_sum(self.s2,axis=1)/s2_number
             # self.s1=tf.reduce_mean(self.s1,axis=1)
             # self.s2=tf.reduce_mean(self.s2,axis=1)
+
         with tf.variable_scope('char_output_layer',
                                initializer=tf.contrib.layers.xavier_initializer(uniform=True)) as scope:
             cgru = add_GRU(hidden_rnn_size[-1] // 2, activation=tf.nn.relu, keep_prob=self.dropout_keep_prob)
@@ -126,6 +207,7 @@ class RnnQNet:
             # self.s4=tf.reduce_sum(self.s4,axis=1)/s4_number
             # self.s3=tf.reduce_mean(self.s3,axis=1)
             # self.s4=tf.reduce_mean(self.s4,axis=1)
+
         with tf.variable_scope('output_layer', initializer=tf.contrib.layers.xavier_initializer(uniform=True)) as scope:
             self.o = tf.concat([self.s1, self.s2, self.s3, self.s4], axis=-1)
             # self.o=tf.concat([self.s3,self.s4],axis=-1)
@@ -135,69 +217,6 @@ class RnnQNet:
             self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.o, labels=self.y))
 
         with tf.variable_scope('train'):
-            self.optimizier = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
             tf.summary.scalar('loss', self.loss)
-            self.train_op = self.optimizier.minimize(self.loss)
-
-        self.init_op = tf.global_variables_initializer()
-        self.merge_op = tf.summary.merge_all()
-        self.session = tf.Session()
-        self.session.run(self.init_op)
-        self.saver = tf.train.Saver()
-        self.writer = tf.summary.FileWriter(log_dir,
-                                            graph=self.session.graph
-                                            )
-
-    def train(self, q1w, q1c, q2w, q2c, y, drop_keep_prob=0.85, record_interval=10):
-        feed_dict = {
-            self.q1_words: q1w,
-            self.q2_words: q2w,
-            self.q1_chars: q1c,
-            self.q2_chars: q2c,
-            self.y: y,
-            self.dropout_keep_prob: drop_keep_prob
-        }
-        if self.global_step % record_interval == 0:
-            _, loss, summaries = self.session.run([self.train_op, self.loss, self.merge_op], feed_dict=feed_dict)
-            self.writer.add_summary(summaries, self.global_step)
-        else:
-            _, loss = self.session.run([self.train_op, self.loss], feed_dict=feed_dict)
-        self.global_step += 1
-        return loss
-
-    def evaluate(self, q1w, q1c, q2w, q2c, y, drop_keep_prob=1.0):
-        feed_dict = {
-            self.q1_words: q1w,
-            self.q2_words: q2w,
-            self.q1_chars: q1c,
-            self.q2_chars: q2c,
-            self.y: y,
-            self.dropout_keep_prob: drop_keep_prob
-        }
-        loss = self.session.run([self.loss], feed_dict=feed_dict)[0]
-        summary = tf.Summary()
-        summary_value = summary.value.add()
-        summary_value.simple_value = loss
-        summary_value.tag = 'evaluate_loss'
-        self.writer.add_summary(summary, self.global_step)
-        return loss
-
-    def predict(self, q1w, q1c, q2w, q2c):
-        feed_dict = {
-            self.q1_words: q1w,
-            self.q2_words: q2w,
-            self.q1_chars: q1c,
-            self.q2_chars: q2c,
-            self.dropout_keep_prob: 1.0
-        }
-        y_hat = self.session.run([self.output], feed_dict=feed_dict)[0]
-        return y_hat[:, 1]
-
-    def load_model(self, model_path='./QModel'):
-        self.saver.restore(self.session, model_path + '/rnnqnet')
-
-    def save_model(self, model_path='./QModel'):
-        if not os.path.exists(model_path):
-            os.mkdir(model_path)
-        model_file = model_path + '/rnnqnet'
-        self.saver.save(self.session, model_file)
+            self.train_op = self.optimizer.minimize(self.loss)

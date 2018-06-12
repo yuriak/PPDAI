@@ -16,7 +16,7 @@ def main():
     dev_corpus = train_corpus[:1024]
     train_corpus = train_corpus[1024:]
 
-    net = RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, learning_rate=0.0005, log_dir='./logs/model4')
+    net = RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model4')
 
     global_step = 0
     previous_save_loss = np.inf
