@@ -20,13 +20,11 @@ class BaseModel(object):
 
         self.init_op = tf.global_variables_initializer()
         self.merge_op = tf.summary.merge_all()
-        self.session = tf.Session()
-        self.session.run(self.init_op)
         self.saver = tf.train.Saver()
         self.writer = tf.summary.FileWriter(log_dir,
                                             graph=self.session.graph
                                             )
-
+        self.session = None
         self.train_op = None
         self.loss = None
         self.output = None
@@ -77,12 +75,12 @@ class BaseModel(object):
         return y_hat[:, 1]
 
     def load_model(self, model_path='./QModel'):
-        self.saver.restore(self.session, model_path + '/rnnqnet')
+        self.saver.restore(self.session, model_path + '/' + self._name)
 
     def save_model(self, model_path='./QModel'):
         if not os.path.exists(model_path):
             os.mkdir(model_path)
-        model_file = model_path + '/rnnqnet'
+        model_file = model_path + '/' + self._name
         self.saver.save(self.session, model_file)
 
 
@@ -91,7 +89,10 @@ class RnnQNet(BaseModel):
         super().__init__(word_embedding, char_embedding, 'Rnn_QNet', log_dir=log_dir)
 
         self._build_model(word_embedding, char_embedding, encoder_units_number=[512, 256], attention_size=[128],
-                          hidden_rnn_size=[128], learning_rate=0.0001, )
+                          hidden_rnn_size=[128], learning_rate=0.0001)
+
+        self.session = tf.Session()
+        self.session.run(self.init_op)
 
     def _build_model(self, word_embedding, char_embedding, encoder_units_number, attention_size,
                      hidden_rnn_size, learning_rate=0.0001):
