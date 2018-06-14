@@ -76,11 +76,11 @@ class BaseModel(object):
 
 
 class RnnQNet(BaseModel):
-    def __init__(self, word_embedding, char_embedding, log_dir='./logs'):
+    def __init__(self, word_embedding, char_embedding, log_dir='./logs', learning_rate=0.0001):
         super().__init__(word_embedding, char_embedding, 'Rnn_QNet', log_dir=log_dir)
         
         self._build_model(word_embedding, char_embedding, encoder_units_number=[512, 256], attention_size=[128],
-                          hidden_rnn_size=[128], learning_rate=0.0001)
+                          hidden_rnn_size=[128], learning_rate=learning_rate)
         self.init_op = tf.global_variables_initializer()
         self.merge_op = tf.summary.merge_all()
         self.saver = tf.train.Saver()
@@ -219,11 +219,11 @@ class RnnQNet(BaseModel):
 
 
 class RnnQNetNG(BaseModel):
-    def __init__(self, word_embedding, char_embedding, log_dir='./logs'):
-        super().__init__(word_embedding, char_embedding, 'Rnn_QNet', log_dir=log_dir)
+    def __init__(self, word_embedding, char_embedding, log_dir='./logs', learning_rate=0.0001):
+        super().__init__(word_embedding, char_embedding, 'Rnn_QNet_NG', log_dir=log_dir)
         
         self._build_model(word_embedding, char_embedding, encoder_units_number=[256, 128], attention_size=[128],
-                          hidden_rnn_size=[128], learning_rate=0.0001)
+                          hidden_rnn_size=[128], learning_rate=learning_rate)
         self.init_op = tf.global_variables_initializer()
         self.merge_op = tf.summary.merge_all()
         self.saver = tf.train.Saver()
@@ -319,32 +319,32 @@ class RnnQNetNG(BaseModel):
         
         with tf.variable_scope('word_output_layer',
                                initializer=tf.contrib.layers.xavier_initializer(uniform=True)) as scope:
-            fwgru, bwgru = biGRUs(hidden_rnn_size[-1] // 2, activation=tf.nn.relu, keep_prob=self.dropout_keep_prob)
+            fwgru, bwgru = biGRUs([hidden_rnn_size[-1] // 2], activation=tf.nn.relu, keep_prob=self.dropout_keep_prob)
             
             self.s1 = dot_attention(self.q1q2w_att, self.q1q2c_att, hidden=attention_size, scope='s1_attention')
             _, self.s1 = tf.nn.bidirectional_dynamic_rnn(inputs=self.s1, cell_fw=fwgru, cell_bw=bwgru, dtype=tf.float32, scope='s1')
-            self.s1 = itertools.chain.from_iterable(self.s1)
+            self.s1 = list(itertools.chain.from_iterable(self.s1))
             self.s1 = tf.concat(self.s1, axis=-1)
             
             self.s2 = dot_attention(self.q2q1w_att, self.q2q1c_att, hidden=attention_size, scope='s2_attention')
             tf.get_variable_scope().reuse_variables()
             _, self.s2 = tf.nn.bidirectional_dynamic_rnn(inputs=self.s2, cell_fw=fwgru, cell_bw=bwgru, dtype=tf.float32, scope='s2')
-            self.s2 = itertools.chain.from_iterable(self.s2)
+            self.s2 = list(itertools.chain.from_iterable(self.s2))
             self.s2 = tf.concat(self.s2, axis=-1)
         
         with tf.variable_scope('char_output_layer',
                                initializer=tf.contrib.layers.xavier_initializer(uniform=True)) as scope:
-            fcgru, bcgru = biGRUs(hidden_rnn_size[-1] // 2, activation=tf.nn.relu, keep_prob=self.dropout_keep_prob)
+            fcgru, bcgru = biGRUs([hidden_rnn_size[-1] // 2], activation=tf.nn.relu, keep_prob=self.dropout_keep_prob)
             
             self.s3 = dot_attention(self.q1q2c_att, self.q1q2w_att, hidden=attention_size, scope='s3_attention')
             _, self.s3 = tf.nn.bidirectional_dynamic_rnn(inputs=self.s3, cell_fw=fcgru, cell_bw=bcgru, dtype=tf.float32, scope='s3')
-            self.s3 = itertools.chain.from_iterable(self.s3)
+            self.s3 = list(itertools.chain.from_iterable(self.s3))
             self.s3 = tf.concat(self.s3, axis=-1)
             
             self.s4 = dot_attention(self.q2q1c_att, self.q2q1w_att, hidden=attention_size, scope='s4_attention')
             tf.get_variable_scope().reuse_variables()
             _, self.s4 = tf.nn.bidirectional_dynamic_rnn(inputs=self.s4, cell_fw=fcgru, cell_bw=bcgru, dtype=tf.float32, scope='s4')
-            self.s4 = itertools.chain.from_iterable(self.s4)
+            self.s4 = list(itertools.chain.from_iterable(self.s4))
             self.s4 = tf.concat(self.s4, axis=-1)
         
         with tf.variable_scope('output_layer', initializer=tf.contrib.layers.xavier_initializer(uniform=True)) as scope:
@@ -361,11 +361,11 @@ class RnnQNetNG(BaseModel):
 
 
 class CnnQNet(BaseModel):
-    def __init__(self, word_embedding, char_embedding, log_dir='./logs'):
+    def __init__(self, word_embedding, char_embedding, log_dir='./logs', learning_rate=0.0001):
         super().__init__(word_embedding, char_embedding, 'Cnn_QNet', log_dir=log_dir)
         
         self._build_model(word_embedding, char_embedding, cnn_encoder_units_number=[256, 128], attention_size=[128],
-                          attention_cnn_size=[128, 64], kernel_size=2, learning_rate=0.0001)
+                          attention_cnn_size=[128, 64], kernel_size=2, learning_rate=learning_rate)
         self.init_op = tf.global_variables_initializer()
         self.merge_op = tf.summary.merge_all()
         self.saver = tf.train.Saver()
@@ -527,10 +527,10 @@ class CnnQNet(BaseModel):
 
 class RCnnQNet(BaseModel):
     def __init__(self, word_embedding, char_embedding, learning_rate=0.0001, log_dir='./logs'):
-        super().__init__(word_embedding, char_embedding, 'Cnn_QNet', log_dir=log_dir)
+        super().__init__(word_embedding, char_embedding, 'RCnn_QNet', log_dir=log_dir)
         
         self._build_model(word_embedding, char_embedding, rnn_encoder_units_number=[256, 128], rnn_decoder_units_number=[32], attention_size=[128],
-                          attention_cnn_size=[128, 64], kernel_size=2, learning_rate=0.0001)
+                          attention_cnn_size=[128, 64], kernel_size=2, learning_rate=learning_rate)
         self.init_op = tf.global_variables_initializer()
         self.merge_op = tf.summary.merge_all()
         self.saver = tf.train.Saver()
