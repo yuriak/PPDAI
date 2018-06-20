@@ -1,5 +1,5 @@
 import numpy as np
-from models import *
+from models import rnn_q_net
 
 lmap = lambda func, it: list(map(lambda x: func(x), it))
 
@@ -16,7 +16,7 @@ def main():
     dev_corpus = train_corpus[:1024]
     train_corpus = train_corpus[1024:]
 
-    net = RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model4')
+    net = rnn_q_net.RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model4')
 
     global_step = 0
     previous_save_loss = np.inf
