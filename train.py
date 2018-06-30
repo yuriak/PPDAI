@@ -1,5 +1,5 @@
 import numpy as np
-from models import rnn_q_net
+from models import rcnn_mix_later
 
 lmap = lambda func, it: list(map(lambda x: func(x), it))
 
@@ -16,7 +16,8 @@ def main():
     dev_corpus = train_corpus[:1024]
     train_corpus = train_corpus[1024:]
 
-    net = rnn_q_net.RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model4')
+    net = rcnn_mix_later.RCnnQNetMixLater(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model5')
+#    net = rnn_q_net.RnnQNet(word_embedding=word_matrix, char_embedding=char_matrix, log_dir='./logs/model4')
 
     global_step = 0
     previous_save_loss = np.inf
@@ -61,12 +62,12 @@ def main():
                 b_y = dev_corpus[:max_dev_batch_size, -1]
                 dev_loss = net.evaluate(q1w=b_q1w, q1c=b_q1c, q2w=b_q2w, q2c=b_q2c, y=b_y)
                 if global_step % checkpoint_interval == 0 and previous_save_loss > dev_loss:
-                    net.save_model(model_path='./QModel4')
+                    net.save_model(model_path='./QModel5')
                     previous_save_loss = dev_loss
                     print(global_step, 'save model @ val loss', dev_loss)
                 print(global_step, 'evaluate loss', dev_loss)
 
-    net.load_model(model_path='./QModel4')
+    net.load_model(model_path='./QModel5')
 
     it = 0
     result = []
